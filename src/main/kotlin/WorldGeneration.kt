@@ -69,12 +69,13 @@ object WorldGeneration {
                     neighbours,
                     ids
                 )
+                val space = polygon.getSquareSpace()
                 cities.add(
                     CityData(
                         id,
                         faker.address().cityName(),
                         random.nextInt(16777214),
-                        random.nextInt(5000),
+                        space * 9 + random.nextInt(space * 2),
                         point.x,
                         point.y,
                         polygon,

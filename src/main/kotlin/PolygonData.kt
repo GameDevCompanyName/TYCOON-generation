@@ -21,4 +21,14 @@ data class PolygonData (
         return true
     }
 
+    fun getSquareSpace(): Int {
+        val maxX = this.pointsX.max()
+        val maxY = this.pointsY.max()
+        val minX = this.pointsX.min()
+        val minY = this.pointsY.min()
+        val width = maxX!! - minX!!
+        val height = maxY!! - minY!!
+        return ((width * height).toInt())
+    }
+
 }

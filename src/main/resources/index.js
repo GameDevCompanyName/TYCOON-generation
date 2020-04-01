@@ -3,7 +3,7 @@ window.onload = main;
 let app;
 let mapContainer;
 
-let scale = 1.0;
+let scale = 3.0;
 let offsetX = 0;
 let offsetY = 0;
 
@@ -140,6 +140,7 @@ function displayCity(city) {
         resetNeighbours(this.id);
     };
     polygon.click = function (mouseEvent) {
+        alert(city.population);
         if (!movementInProgress) {
             offsetX = this.midX;
             offsetY = this.midY;
@@ -159,10 +160,10 @@ function displayCity(city) {
     mapContainer.addChild(polygon);
 
     let text = new PIXI.Text();
-    text.text = city.name.concat("(", city.population, ")");
-    text.x = offsetX + midX - 7;
+    text.text = city.name;
+    text.x = offsetX + midX - 20;
     text.y = offsetY + midY - 3;
-    text.style.fontSize = 10;
+    text.style.fontSize = 14;
     mapContainer.addChild(text);
 }
 
