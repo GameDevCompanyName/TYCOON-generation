@@ -1,3 +1,10 @@
+import GenerationData.City
+import GenerationData.PolygonData
+import GenerationData.Resource
+import GenerationData.Road
+import GenerationData.StoreItem
+import GenerationData.World
+import com.beust.klaxon.Klaxon
 import com.github.javafaker.Faker
 import com.github.javafaker.service.RandomService
 import de.alsclo.voronoi.Voronoi
@@ -7,12 +14,15 @@ import de.alsclo.voronoi.graph.Point
 import java.util.*
 import java.util.stream.Stream
 import kotlin.math.abs
+import kotlin.math.sqrt
 import kotlin.random.Random
 import kotlin.random.asJavaRandom
 import kotlin.streams.toList
 
 object WorldGeneration {
     private const val DELTA: Double = 0.1
+    private const val RESOURCE_IS_ABSENT_PROBABILITY = 0.1
+    private const val RANDOM_VARIATION = 0.25
 
     fun generateWorld(maxCoordinate: Double, quantity: Long, seed: Long): World {
         val random = Random(seed)
@@ -44,42 +54,132 @@ object WorldGeneration {
             points,
             ids,
             polygons,
-            neighbours,
             random
         )
 
-        return World(cities, seed)
+        val remainingIds = cities.map { it.id }
+        val neighbourIds = buildNeighbours(neighbours, remainingIds, ids)
+        val roads = buildRoadData(neighbourIds)
+
+        val storeItems: Set<StoreItem> = generateStores(cities, random)
+
+        val resources: Set<Resource> = Resource.all().toSet()
+
+        return World(cities, roads, resources, storeItems, seed)
+    }
+
+    private fun generateStores(cities: Set<City>, random: Random): Set<StoreItem> {
+        val items = mutableSetOf<StoreItem>()
+        for (city in cities) {
+            for (resource in Resource.all()) {
+                if (randomEvent(RESOURCE_IS_ABSENT_PROBABILITY, random)) {
+                    items.add(
+                        StoreItem(
+                            city.id,
+                            resource.id,
+                            calculateCost(resource, city.population, true, random),
+                            0
+                        )
+                    )
+                } else {
+                    items.add(
+                        StoreItem(
+                            city.id,
+                            resource.id,
+                            calculateCost(resource, city.population, false, random),
+                            calculateQuantity(resource, city.population, random)
+                        )
+                    )
+                }
+            }
+        }
+        return items
+    }
+
+    private fun calculateQuantity(resource: Resource, population: Int, random: Random): Int {
+        val variation = random.nextDouble(1.0 - RANDOM_VARIATION, 1.0 + RANDOM_VARIATION)
+        val populationModifier = sqrt(population.toDouble())
+        return (variation * populationModifier / resource.valueModifier).toInt()
+    }
+
+    private fun calculateCost(
+        resource: Resource,
+        population: Int,
+        isAbsent: Boolean,
+        random: Random
+    ): Int {
+        val variation = random.nextDouble(1.0 - RANDOM_VARIATION, 1.0 + RANDOM_VARIATION)
+        var basePrice = 100 * resource.valueModifier * variation
+        if (isAbsent)
+            basePrice *= 1.5
+        return basePrice.toInt()
+    }
+
+    private fun randomEvent(probability: Double, random: Random): Boolean {
+        return random.nextDouble(0.0, 1.0) <= probability
+    }
+
+    private fun buildNeighbours(
+        neighbours: Map<Point, Set<Point>>,
+        remainingIds: List<Int>,
+        ids: MutableMap<Point, Int>
+    ): Map<Int, Set<Int>> {
+        val neighbourIds = mutableMapOf<Int, Set<Int>>()
+        for (entry in neighbours) {
+            val cityId = ids[entry.key]
+            if (cityId == null || !remainingIds.contains(cityId)) {
+                continue
+            }
+            val idSet = mutableSetOf<Int>()
+            for (neighbour in entry.value) {
+                val neighId = ids[neighbour]
+                if (neighId == null || !remainingIds.contains(neighId)) {
+                    continue
+                } else {
+                    idSet.add(neighId)
+                }
+            }
+            neighbourIds[cityId] = idSet
+        }
+        return neighbourIds
+    }
+
+    private fun buildRoadData(neighbourIds: Map<Int, Set<Int>>): Set<Road> {
+        val alreadyExisting = mutableSetOf<Road>()
+        val roadSet = mutableSetOf<Road>()
+        for (entry in neighbourIds) {
+            val cityId = entry.key
+            for (neighId in entry.value) {
+                val road = Road(cityId, neighId)
+                if (!alreadyExisting.contains(road)) {
+                    roadSet.add(Road(cityId, neighId))
+                    alreadyExisting.add(Road(neighId, cityId))
+                }
+            }
+        }
+        return roadSet
     }
 
     private fun buildCityData(
         points: List<Point>,
         ids: Map<Point, Int>,
         polygons: Map<Point, PolygonData>,
-        neighbours: Map<Point, Set<Point>>,
         random: Random
-    ): Set<CityData> {
+    ): Set<City> {
         val faker = Faker(Locale("fr"), RandomService(random.asJavaRandom()))
-        val cities = mutableSetOf<CityData>()
+        val cities = mutableSetOf<City>()
         for (point in points) {
             try {
                 val id = ids[point] ?: continue
                 val polygon = polygons[point] ?: continue
-                val neighbourIds = neighbourIds(
-                    point,
-                    neighbours,
-                    ids
-                )
                 val space = polygon.getSquareSpace()
                 cities.add(
-                    CityData(
+                    City(
                         id,
                         faker.address().cityName(),
                         random.nextInt(16777214),
                         space * 9 + random.nextInt(space * 2),
-                        point.x,
-                        point.y,
-                        polygon,
-                        neighbourIds
+                        Klaxon().toJsonString(polygon)
                     )
                 )
             } catch (e: NullPointerException) {
