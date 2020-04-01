@@ -1,0 +1,7 @@
+/build/
+/.gradle/
+/gradlew.bat
+/world 1488.json
+/.idea/
+/gradlew
+/gradle/wrapper/gradle-wrapper.jar
